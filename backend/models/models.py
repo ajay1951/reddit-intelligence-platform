@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -39,7 +40,11 @@ class Post(Base):
     """Post scraped from Reddit."""
 
     __tablename__ = "posts"
-    __table_args__ = (UniqueConstraint("url", name="uq_posts_url"),)
+    __table_args__ = (
+        UniqueConstraint("url", name="uq_posts_url"),
+        Index("ix_post_technologies", "technologies", postgresql_using="gin"),
+        Index("ix_post_sentiment", "sentiment_label"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(1024), nullable=False)
@@ -64,7 +69,11 @@ class Comment(Base):
     """Comment under a post."""
 
     __tablename__ = "comments"
-    __table_args__ = (UniqueConstraint("id", name="uq_comments_id"),)
+    __table_args__ = (
+        UniqueConstraint("id", name="uq_comments_id"),
+        Index("ix_comment_technologies", "technologies", postgresql_using="gin"),
+        Index("ix_comment_sentiment", "sentiment_label"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("posts.id"), nullable=False)

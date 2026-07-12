@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
+import { apiClient } from '../api/client';
 import { Send, Bot, User, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import './RagChat.css';
 
@@ -31,7 +31,7 @@ export default function RagChat() {
     setLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:8000/search/rag', {
+      const res = await apiClient.post('/search/rag', {
         query: userMessage,
         top_k: 25
       });

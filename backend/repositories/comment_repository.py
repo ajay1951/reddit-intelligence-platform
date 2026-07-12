@@ -21,7 +21,7 @@ class CommentRepository(BaseRepository[Comment]):
 
     async def search_comments(self, session: AsyncSession, query: str, limit: int = 5) -> list[Comment]:
         stmt = select(Comment).options(joinedload(Comment.post).joinedload(Post.subreddit)).where(
-            text("to_tsvector('english', content) @@ plainto_tsquery('english', :query)")
+            text("to_tsvector('english', comments.content) @@ plainto_tsquery('english', :query)")
         ).params(query=query).limit(limit)
         result = await session.execute(stmt)
         return list(result.scalars().all())

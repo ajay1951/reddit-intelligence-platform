@@ -66,17 +66,21 @@ def schedule_etl_job(
     else:
         raise ValueError("Either interval_minutes or cron must be set.")
 
+    def sync_run_batch_etl(subs, p_lim, c_lim, conc):
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_batch_etl(subs, p_lim, c_lim, conc))
+        finally:
+            loop.close()
+
     scheduler.add_job(
-        run_batch_etl,
+        sync_run_batch_etl,
         trigger=trigger,
         id=job_id,
         replace_existing=True,
-        kwargs={
-            "subreddits": subreddits,
-            "post_limit": post_limit,
-            "comment_limit": comment_limit,
-            "concurrency": settings.scraper_concurrency,
-        },
+        args=[subreddits, post_limit, comment_limit, settings.scraper_concurrency]
     )
 
     job = scheduler.get_job(job_id)

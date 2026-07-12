@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, List
+from typing import Any, List, Optional
 
 from apscheduler.jobstores.base import JobLookupError
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -59,20 +59,22 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc: Exception):
-    logger.exception("Unhandled Server Error", error=str(exc), path=request.url.path)
-    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled Server Error: {str(exc)} at {request.url.path}")
+    return JSONResponse(status_code=500, content={"message": "Internal Server Error"})
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc: RequestValidationError):
-    logger.warning("Validation Error", errors=exc.errors(), path=request.url.path)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.warning(f"Validation Error: {exc.errors()} at {request.url.path}")
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 class BatchScrapeRequest(BaseModel):
-    subreddits: List[str] = Field(..., min_items=1)
-    post_limit: int = Field(25, ge=1, le=10000)
-    comment_limit: int = Field(5, ge=0, le=100)
+    subreddits: List[str] = Field(..., min_items=1, max_items=100)
+    post_limit: int = Field(25, ge=1, le=100000)
+    comment_limit: int = Field(5, ge=0, le=100000)
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
 class ScheduleRequest(BaseModel):
@@ -111,6 +113,8 @@ async def scrape_batch_endpoint(request: BatchScrapeRequest) -> dict[str, Any]:
             post_limit=request.post_limit,
             comment_limit=request.comment_limit,
             concurrency=settings.scraper_concurrency,
+            start_date=request.start_date,
+            end_date=request.end_date,
         )
         return {"status": "dispatched", "task_id": task.id, "subreddits": request.subreddits}
     except Exception as exc:

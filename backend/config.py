@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # Scraper
     scraper_concurrency: int
     scraper_rate_limit_per_sec: int
+    apify_api_token: Optional[str] = None
 
     # ChromaDB
     chroma_persist_directory: str = "./chroma_data"
@@ -48,11 +49,10 @@ class Settings(BaseSettings):
     ollama_base_url: Optional[str] = None
     ollama_embedding_model: Optional[str] = None
     ollama_rag_model: Optional[str] = None
-    openrouter_api_key: Optional[str] = None
-    openrouter_api_keys: str = ""
-    openrouter_embedding_model: str = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
-    openrouter_rag_model: str = "meta-llama/llama-3.3-70b-instruct:free"
-    openrouter_fallback_rag_models: str = ""
+    groq_api_key: Optional[str] = None
+    groq_model: str = "llama3-8b-8192"
+    hf_api_key: Optional[str] = None
+    hf_embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

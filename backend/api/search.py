@@ -16,14 +16,18 @@ from backend.database.connection import get_session
 
 router = APIRouter(prefix="/search", tags=["search"])
 
+# Instantiate services globally so AI models are loaded into memory once at startup,
+# instead of reloading from disk on every single API request.
+_semantic_service = SemanticService()
+_rag_service = RagService(semantic_service=_semantic_service)
+
 
 @router.post("/semantic", response_model=SemanticSearchResponse)
 async def semantic_search(
     request: SemanticSearchRequest,
     session: AsyncSession = Depends(get_session),
 ) -> SemanticSearchResponse:
-    service = SemanticService()
-    results = await service.semantic_search(request.query, top_k=request.top_k)
+    results = await _semantic_service.semantic_search(request.query, top_k=request.top_k)
     return SemanticSearchResponse(
         query=request.query,
         results=[
@@ -42,15 +46,13 @@ async def semantic_search(
 async def reindex_vectors(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, int]:
-    service = SemanticService()
-    count = await service.index_documents(session)
+    count = await _semantic_service.index_documents(session)
     return {"indexed_documents": count}
 
 
 @router.post("/rag", response_model=RagResponse)
 async def rag_query(request: RagRequest, session: AsyncSession = Depends(get_session)) -> RagResponse:
-    service = RagService()
-    answer, sources = await service.answer_query(session, request.query, top_k=request.top_k)
+    answer, sources = await _rag_service.answer_query(session, request.query, top_k=request.top_k)
     return RagResponse(
         query=request.query,
         answer=answer,

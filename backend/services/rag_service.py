@@ -4,7 +4,6 @@ import httpx
 import structlog
 
 from backend.config import settings
-from backend.services.api_key_manager import api_key_manager
 from backend.services.semantic_service import SemanticService
 from backend.services.reranker_service import RerankerService
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = structlog.get_logger(__name__)
 
 class RagService:
-    OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
+    GROQ_API_BASE = "https://api.groq.com/openai/v1"
 
     def __init__(
         self,
@@ -27,7 +26,7 @@ class RagService:
         candidate_sources = await self.semantic_service.hybrid_search(session, query, top_k=top_k * 3)
         
         # Rerank candidates
-        sources = self.reranker_service.rerank(query, candidate_sources, top_k=top_k)
+        sources = await self.reranker_service.rerank(query, candidate_sources, top_k=top_k)
         if not sources:
             return "No relevant documents found to answer your query.", []
 
@@ -50,26 +49,18 @@ class RagService:
         )
         user_prompt = "Context:\n" + "\n".join(context_lines) + "\n\nQuestion: " + query
 
-        models_to_try = [settings.openrouter_rag_model]
-        if settings.openrouter_fallback_rag_models:
-            fallbacks = [m.strip() for m in settings.openrouter_fallback_rag_models.split(",") if m.strip()]
-            models_to_try.extend(fallbacks)
+        model = settings.groq_model
 
-        last_error = None
-        for model in models_to_try:
-            try:
-                answer = await self._call_openrouter(system_prompt, user_prompt, model)
-                return answer, sources
-            except Exception as e:
-                logger.warning(f"Model {model} failed. Falling back to next model. Error: {str(e)}")
-                last_error = e
-                continue
+        try:
+            answer = await self._call_groq(system_prompt, user_prompt, model)
+            return answer, sources
+        except Exception as e:
+            logger.error(f"Model {model} failed. Error: {str(e)}")
+            return "I apologize, but I am currently unable to process your request due to system rate limits or connectivity issues. Please try again later.", []
 
-        raise RuntimeError(f"All fallback models exhausted due to rate limits or errors. Last error: {str(last_error)}")
-
-    async def _call_openrouter(self, system_prompt: str, user_prompt: str, model: str) -> str:
+    async def _call_groq(self, system_prompt: str, user_prompt: str, model: str) -> str:
         headers = {
-            "Authorization": f"Bearer {api_key_manager.get_next_key()}",
+            "Authorization": f"Bearer {settings.groq_api_key}",
             "Content-Type": "application/json",
         }
         json_data = {
@@ -79,7 +70,7 @@ class RagService:
                 {"role": "user", "content": user_prompt},
             ],
         }
-        url = f"{self.OPENROUTER_API_BASE}/chat/completions"
+        url = f"{self.GROQ_API_BASE}/chat/completions"
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(url, headers=headers, json=json_data)
@@ -92,4 +83,4 @@ class RagService:
                 if isinstance(message, dict) and message.get("content"):
                     return message["content"]
 
-        raise RuntimeError(f"Unexpected completion response from OpenRouter: {payload}")
+        raise RuntimeError(f"Unexpected completion response from Groq: {payload}")

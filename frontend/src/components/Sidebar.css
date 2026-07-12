@@ -1,6 +1,8 @@
 .sidebar {
   width: 260px;
-  background-color: #0b0c10;
+  background-color: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;

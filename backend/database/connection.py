@@ -4,22 +4,26 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from backend.config import settings
-
 
 DATABASE_URL = (
     f"postgresql+asyncpg://{settings.postgres_user}:{settings.postgres_password}"
     f"@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
 )
 
+engine: AsyncEngine = create_async_engine(
+    DATABASE_URL, 
+    echo=False, 
+    future=True, 
+    poolclass=AsyncAdaptedQueuePool,
+    pool_size=20,
+    max_overflow=10
+)
 
-engine: AsyncEngine = create_async_engine(DATABASE_URL, echo=False, future=True, poolclass=NullPool)
-
-AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 
 @asynccontextmanager
