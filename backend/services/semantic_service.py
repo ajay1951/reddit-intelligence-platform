@@ -65,18 +65,15 @@ class SemanticService:
         if not documents:
             return 0
 
-        embeddings = await self.embedding_service.generate_embeddings(documents)
         self.chroma_repository.add_documents(
             ids=ids,
-            embeddings=embeddings,
             documents=documents,
             metadatas=metadatas,
         )
         return len(ids)
 
     async def semantic_search(self, query: str, top_k: int = 5) -> list[dict[str, str | int | None]]:
-        embedding = await self.embedding_service.generate_embedding(query)
-        result = self.chroma_repository.query(embedding=embedding, n_results=top_k)
+        result = self.chroma_repository.query(query_text=query, n_results=top_k)
 
         documents = result.get("documents", [])
         metadatas = result.get("metadatas", [])

@@ -25,8 +25,8 @@ class RagService:
         # Perform hybrid search fetching more candidates
         candidate_sources = await self.semantic_service.hybrid_search(session, query, top_k=top_k * 3)
         
-        # Rerank candidates
-        sources = await self.reranker_service.rerank(query, candidate_sources, top_k=top_k)
+        # Bypass reranker due to HF block
+        sources = candidate_sources[:top_k]
         if not sources:
             return "No relevant documents found to answer your query.", []
 
