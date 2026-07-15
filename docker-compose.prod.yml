@@ -40,8 +40,6 @@ services:
         condition: service_started
     command: ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
-    dns:
-      - 169.254.169.254
 
   redis:
     image: redis:7-alpine
@@ -60,8 +58,6 @@ services:
         condition: service_started
     command: ["celery", "-A", "backend.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=1"]
     restart: unless-stopped
-    dns:
-      - 169.254.169.254
 
   frontend:
     build:
