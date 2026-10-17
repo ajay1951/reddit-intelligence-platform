@@ -10,10 +10,15 @@ export const apiClient = axios.create({
   timeout: 300000,
 });
 
-// Optional: Add request interceptors (e.g., for auth tokens later)
+import { getAuthToken } from "../lib/auth";
+
+// Attach bearer token to all outgoing API requests
 apiClient.interceptors.request.use(
-  (config) => {
-    // You can attach tokens here
+  async (config) => {
+    const token = await getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {

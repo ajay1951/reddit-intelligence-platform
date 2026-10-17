@@ -27,3 +27,14 @@ def test_make_comment_id_is_within_bigint_range():
 
     assert isinstance(comment_id, int)
     assert 0 < comment_id < 2**63
+
+
+import pytest
+from backend.etl.hf_provider import _get_and_advance_offset
+
+@pytest.mark.asyncio
+async def test_hf_explicit_offset_advances():
+    current, nxt = await _get_and_advance_offset("test_sub", 100, None, explicit_offset=250)
+    assert current == 250
+    assert nxt == 350
+

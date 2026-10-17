@@ -1,11 +1,27 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { BrainCircuit, Database, LineChart, Search, FileText, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { 
+  BrainCircuit, 
+  Database, 
+  LineChart, 
+  Search, 
+  FileText, 
+  CheckCircle2, 
+  ShieldAlert, 
+  Sparkles, 
+  ArrowRight, 
+  Copy, 
+  Check, 
+  Download, 
+  StopCircle, 
+  Layers, 
+  Clock, 
+  CheckCheck
+} from 'lucide-react';
 import { useSSE } from '../hooks/useSSE';
 import { API_ENDPOINTS } from '../api/endpoints';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import './DeepResearch.css';
 
 interface AgentStepProps {
@@ -13,21 +29,30 @@ interface AgentStepProps {
   title: string;
   status: 'running' | 'complete' | 'error' | 'pending';
   message: string;
+  isLast?: boolean;
 }
 
-const AgentStep = memo(({ icon: Icon, title, status, message }: AgentStepProps) => {
+const AgentStep = memo(({ icon: Icon, title, status, message, isLast = false }: AgentStepProps) => {
   return (
-    <div className={`agent-step ${status} p-4 rounded-lg bg-[var(--card-bg)] border border-[var(--border-light)] flex items-start gap-4 mb-3 transition-all`}>
-      <div className={`p-2 rounded-lg ${status === 'running' ? 'bg-blue-500/20 text-blue-400' : status === 'complete' ? 'bg-green-500/20 text-green-400' : 'bg-[var(--border-light)] text-[var(--text-secondary)]'}`}>
-        <Icon size={24} />
+    <div className={`orchestrator-step ${status}`}>
+      <div className="step-timeline-rail">
+        <div className={`step-node-icon ${status}`}>
+          {status === 'running' && <div className="step-spinner"></div>}
+          {status === 'complete' && <CheckCircle2 size={16} className="text-emerald-600" />}
+          {status === 'pending' && <Icon size={14} className="text-slate-400" />}
+          {status === 'error' && <ShieldAlert size={16} className="text-red-500" />}
+        </div>
+        {!isLast && <div className={`step-connector-line ${status}`}></div>}
       </div>
-      <div className="flex-1">
-        <h4 className="font-semibold text-[var(--text-primary)]">{title}</h4>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">{message}</p>
-      </div>
-      <div className="flex items-center justify-center w-8 h-8">
-        {status === 'running' && <div className="w-5 h-5 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>}
-        {status === 'complete' && <CheckCircle2 className="text-green-500" size={20} />}
+
+      <div className="step-content-box">
+        <div className="step-title-row">
+          <span className="step-label">{title}</span>
+          <span className={`step-status-chip ${status}`}>
+            {status === 'running' ? 'In Progress' : status === 'complete' ? 'Completed' : status === 'error' ? 'Failed' : 'Queued'}
+          </span>
+        </div>
+        <p className="step-message-text">{message || 'Awaiting agent execution...'}</p>
       </div>
     </div>
   );
@@ -41,25 +66,61 @@ interface ResearchStep {
   message: string;
 }
 
+const RESEARCH_PROMPTS = [
+  'What are the biggest complaints about Docker and containers in Enterprise?',
+  'Analyze developer sentiment on React Server Components vs traditional client SPAs.',
+  'Identify top failure modes in Python production microservices from Reddit engineering discussions.',
+  'Summarize sentiment on remote engineering compensation and market salary expectations.'
+];
+
 export default function DeepResearch() {
   const [topic, setTopic] = useState('');
   const [steps, setSteps] = useState<ResearchStep[]>([]);
   const [finalReport, setFinalReport] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const { isStreaming, error, startStream, stopStream } = useSSE(API_ENDPOINTS.DEEP_RESEARCH);
 
-  const handleResearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!topic.trim()) return;
+  useEffect(() => {
+    if (isStreaming) {
+      setElapsedSeconds(0);
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isStreaming]);
 
+  const handleResearch = async (e?: React.FormEvent, customTopic?: string) => {
+    if (e) e.preventDefault();
+    const query = customTopic || topic;
+    if (!query.trim() || isStreaming) return;
+
+    if (customTopic) setTopic(customTopic);
     setSteps([]);
     setFinalReport('');
 
     await startStream(
-      { topic },
+      { topic: query },
       (event: any) => {
         if (event.step === 'final') {
           setFinalReport(event.data);
+          return;
+        }
+        if (event.step === 'error' || event.status === 'error') {
+          setSteps(prev => {
+            const hasRunning = prev.some(s => s.status === 'running');
+            if (hasRunning) {
+              return prev.map(s => s.status === 'running' ? { ...s, status: 'error', message: event.message || s.message } : s);
+            }
+            return [...prev, { step: 'error', status: 'error', message: event.message || 'Execution error' }];
+          });
           return;
         }
         setSteps(prev => {
@@ -80,96 +141,234 @@ export default function DeepResearch() {
     if (stepName.includes('research')) return Search;
     if (stepName.includes('trend')) return LineChart;
     if (stepName.includes('sentiment')) return BrainCircuit;
-    if (stepName.includes('verification')) return ShieldAlert;
+    if (stepName.includes('verif')) return ShieldAlert;
+    if (stepName.includes('reflect')) return Sparkles;
     if (stepName.includes('report')) return FileText;
     return Database;
   };
 
+  const handleCopyReport = () => {
+    if (!finalReport) return;
+    navigator.clipboard.writeText(finalReport);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadMarkdown = () => {
+    if (!finalReport) return;
+    const blob = new Blob([finalReport], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reddit-intelligence-report-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="deep-research-container max-w-6xl mx-auto">
-      <div className="header mb-8 text-center animate-fade-in">
-        <h1 className="text-3xl font-bold mb-2">Deep <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Research Terminal</span></h1>
-        <p className="text-[var(--text-secondary)]">Deploy a swarm of autonomous agents to synthesize market intelligence.</p>
+    <div className="deep-research-workspace">
+      {/* Page Header */}
+      <div className="research-page-header animate-fade-in">
+        <div>
+          <h1 className="page-title">
+            <span>Deep Research Studio</span>
+          </h1>
+          <p className="subtitle">
+            Autonomous multi-agent synthesis: Ingestion, Trend Analysis, Sentiment Mining & Evidence Verification.
+          </p>
+        </div>
       </div>
 
-      <Card className="mb-8 p-6 animate-fade-in delay-100">
-        <form onSubmit={handleResearch} className="flex gap-4">
-          <Input 
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="e.g., What are the biggest complaints about Docker in Enterprise?"
-            disabled={isStreaming}
-            className="flex-1"
-          />
-          <Button type="submit" isLoading={isStreaming}>
-            Deploy Agents
-          </Button>
-          {isStreaming && (
-            <Button type="button" variant="danger" onClick={stopStream}>
-              Abort
-            </Button>
-          )}
+      {/* Query Control Bar Card */}
+      <Card className="query-control-card animate-fade-in delay-100">
+        <form onSubmit={handleResearch} className="query-form">
+          <div className="query-input-wrap">
+            <Search size={18} className="text-slate-400" />
+            <input 
+              type="text"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g. What are developers saying about FastAPI vs Go in production?"
+              disabled={isStreaming}
+              className="query-text-input"
+            />
+          </div>
+
+          <div className="query-btn-row">
+            {!isStreaming ? (
+              <Button type="submit" disabled={!topic.trim()} className="btn-primary">
+                <span>Deploy Agent Swarm</span>
+                <ArrowRight size={16} />
+              </Button>
+            ) : (
+              <Button type="button" variant="danger" onClick={stopStream}>
+                <StopCircle size={16} />
+                <span>Abort Swarm</span>
+              </Button>
+            )}
+          </div>
         </form>
-        {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}
+
+        {/* Suggestion Chips */}
+        <div className="query-suggestions-strip">
+          <span className="strip-label">
+            <Sparkles size={12} className="text-indigo-600" />
+            <span>Suggested Research Topics:</span>
+          </span>
+          <div className="strip-pills">
+            {RESEARCH_PROMPTS.map((p, idx) => (
+              <button
+                key={idx}
+                type="button"
+                className="strip-pill-btn"
+                onClick={() => handleResearch(undefined, p)}
+                disabled={isStreaming}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="research-error-banner">
+            <ShieldAlert size={16} />
+            <span>{error}</span>
+          </div>
+        )}
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-4 animate-fade-in delay-200">
-          <Card className="h-full p-4">
-            <CardHeader className="mb-4 pb-2 border-b border-gray-800">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <BrainCircuit className="text-blue-400" size={20} />
-                Agent Swarm Status
-              </h3>
-            </CardHeader>
-            <div className="flex flex-col gap-2">
-              {steps.length === 0 && !isStreaming && (
-                <div className="text-center p-8 text-[var(--text-secondary)] border border-dashed border-gray-700 rounded-lg">
-                  Awaiting deployment orders...
-                </div>
-              )}
-              {steps.map((step, i) => (
+      {/* Main Studio Grid: Left Stepper (1/3), Right Dossier (2/3) */}
+      <div className="studio-layout-grid animate-fade-in delay-200">
+        
+        {/* Left Column: Multi-Agent Orchestration Stepper */}
+        <Card className="orchestration-card">
+          <div className="orchestration-header">
+            <div className="orchestration-title-wrap">
+              <BrainCircuit size={18} className="text-indigo-600" />
+              <h2 className="orchestration-title">Agent Orchestrator</h2>
+            </div>
+            {isStreaming && (
+              <div className="orchestrator-timer tabular-nums">
+                <Clock size={12} />
+                <span>{elapsedSeconds}s</span>
+              </div>
+            )}
+          </div>
+
+          <div className="orchestrator-pipeline">
+            {steps.length === 0 && !isStreaming ? (
+              <div className="orchestrator-idle-state">
+                <Layers size={28} className="text-slate-300 mb-2" />
+                <p className="idle-title">Swarm Standby</p>
+                <p className="idle-desc">Deploy a research topic to activate retrieval, sentiment, and claim verification agents.</p>
+              </div>
+            ) : (
+              steps.map((step, idx) => (
                 <AgentStep 
-                  key={i}
+                  key={idx}
                   icon={getIconForStep(step.step)}
-                  title={step.step.replace('_', ' ').toUpperCase()}
+                  title={step.step.replace(/_/g, ' ').toUpperCase()}
                   status={step.status as any}
                   message={step.message}
+                  isLast={idx === steps.length - 1}
                 />
-              ))}
-            </div>
-          </Card>
-        </div>
+              ))
+            )}
+          </div>
+        </Card>
 
-        <div className="lg:col-span-8 animate-fade-in delay-300">
-          <Card className="h-full min-h-[600px] p-6 relative">
-            <CardHeader className="mb-4 pb-2 border-b border-gray-800">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <FileText className="text-cyan-400" size={20} />
-                Executive Briefing
-              </h3>
-            </CardHeader>
-            <div className="prose prose-invert prose-blue max-w-none">
-              {!finalReport && !isStreaming && (
-                <div className="flex flex-col items-center justify-center h-[400px] text-[var(--text-secondary)] opacity-50">
-                  <FileText size={48} className="mb-4" />
-                  <p>Report will be synthesized here.</p>
-                </div>
-              )}
-              {isStreaming && !finalReport && (
-                <div className="flex flex-col items-center justify-center h-[400px] text-blue-400 opacity-70">
-                  <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                  <p className="animate-pulse">Agents are working...</p>
-                </div>
-              )}
-              {finalReport && (
-                <div className="markdown-content animate-fade-in">
-                  <ReactMarkdown>{finalReport}</ReactMarkdown>
-                </div>
-              )}
+        {/* Right Column: Executive Research Dossier */}
+        <Card className="dossier-card">
+          <div className="dossier-header-bar">
+            <div>
+              <h2 className="dossier-title">Executive Research Brief</h2>
+              <p className="dossier-sub">Grounded synthesis compiled with evidence verification scorecard.</p>
             </div>
-          </Card>
-        </div>
+
+            {finalReport && (
+              <div className="dossier-action-buttons">
+                <button 
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleCopyReport}
+                  title="Copy markdown text"
+                >
+                  {copied ? (
+                    <>
+                      <CheckCheck size={14} className="text-emerald-600" />
+                      <span className="text-emerald-600">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+                <button 
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleDownloadMarkdown}
+                  title="Export Markdown report"
+                >
+                  <Download size={14} />
+                  <span>Export .md</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="dossier-content-area">
+            {!finalReport && !isStreaming && (error || steps.some(s => s.status === 'error')) && (
+              <div className="dossier-error-state animate-fade-in">
+                <div className="dossier-error-icon">
+                  <ShieldAlert size={24} />
+                </div>
+                <h3 className="dossier-error-title">Synthesis Interrupted</h3>
+                <p className="dossier-error-desc">
+                  {error || steps.find(s => s.status === 'error')?.message || 'The research swarm encountered an error during intelligence synthesis.'}
+                </p>
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={() => handleResearch()}
+                >
+                  Retry Synthesis
+                </Button>
+              </div>
+            )}
+
+            {!finalReport && !isStreaming && !error && !steps.some(s => s.status === 'error') && (
+              <div className="dossier-placeholder">
+                <FileText size={36} className="text-slate-300 mb-3" />
+                <h3 className="placeholder-title">Awaiting Synthesis</h3>
+                <p className="placeholder-desc">
+                  Select or submit a research query to generate a structured executive brief with verified Reddit citations.
+                </p>
+              </div>
+            )}
+
+            {isStreaming && !finalReport && (
+              <div className="dossier-streaming-loader">
+                <div className="loader-orbit">
+                  <div className="orbit-spinner"></div>
+                  <BrainCircuit size={28} className="text-indigo-600" />
+                </div>
+                <h3 className="loader-title">Synthesizing Market Intelligence</h3>
+                <p className="loader-desc">
+                  Agents are analyzing discussion trees and cross-referencing claim grounding...
+                </p>
+              </div>
+            )}
+
+            {finalReport && (
+              <div className="dossier-markdown-view animate-fade-in">
+                <ReactMarkdown>{finalReport}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+        </Card>
       </div>
     </div>
   );

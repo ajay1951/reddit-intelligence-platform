@@ -4,14 +4,30 @@ import pytest
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-from backend.database.models import Base, Subreddit, Post
+from backend.models.models import Base, Subreddit, Post
 
+
+
+import json
+import sqlite3
+
+sqlite3.register_adapter(list, json.dumps)
+sqlite3.register_converter("JSON", json.loads)
+
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import ARRAY
+
+@compiles(ARRAY, "sqlite")
+def compile_array_sqlite(element, compiler, **kw):
+    return "JSON"
 
 @pytest.mark.asyncio
 async def test_models_create_and_query():
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False, future=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
 
     AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     async with AsyncSessionLocal() as session:

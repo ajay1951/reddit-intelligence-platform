@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { getAuthToken } from '../lib/auth';
 
 export function useSSE<T = any>(endpoint: string) {
   const [isStreaming, setIsStreaming] = useState(false);
@@ -17,14 +18,23 @@ export function useSSE<T = any>(endpoint: string) {
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
         signal: abortControllerRef.current.signal
       });
 
-      if (!response.ok) throw new Error('Stream request failed');
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Stream request failed (${response.status} ${response.statusText}${errorText ? ': ' + errorText : ''})`);
+      }
       if (!response.body) throw new Error('ReadableStream not yet supported in this browser');
 
       const reader = response.body.getReader();

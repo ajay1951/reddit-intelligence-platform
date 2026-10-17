@@ -9,8 +9,15 @@ export const API_ENDPOINTS = {
   // Admin Actions
   SCRAPE_BATCH: '/scrape/batch',
   SEARCH_REINDEX: '/search/reindex',
+  SCHEDULE_JOBS: '/schedule/jobs',
+  SCHEDULE_DAILY_HF: '/schedule/daily-hf',
+  SCHEDULE_HISTORY: '/schedule/history',
+
 
   // Deep Research & Chat
-  DEEP_RESEARCH: '/api/v1/deep-research',
+  DEEP_RESEARCH: '/deep-research',
   SEARCH_RAG: '/search/rag',
+
+  // Observability & Telemetry
+  METRICS_LLM: '/metrics/llm',
 };

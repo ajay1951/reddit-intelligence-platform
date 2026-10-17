@@ -18,23 +18,86 @@ class SemanticService:
         self.embedding_service = embedding_service or EmbeddingService()
         self.chroma_repository = chroma_repository or ChromaRepository()
 
-    async def index_documents(self, session: AsyncSession) -> int:
-        posts_result = await session.execute(
-            select(Post).options(joinedload(Post.subreddit))
-        )
-        posts = posts_result.scalars().all()
+    async def index_posts_and_comments_batch(
+        self,
+        session: AsyncSession,
+        post_ids: list[int] | None = None,
+        comment_ids: list[int] | None = None,
+        batch_size: int = 100,
+    ) -> int:
+        total_indexed = 0
 
-        comments_result = await session.execute(
-            select(Comment).options(joinedload(Comment.post).joinedload(Post.subreddit))
-        )
-        comments = comments_result.scalars().all()
+        # --- Process Posts ---
+        if post_ids is not None:
+            # Explicit list of post IDs
+            for i in range(0, len(post_ids), batch_size):
+                chunk_ids = post_ids[i : i + batch_size]
+                stmt = (
+                    select(Post)
+                    .options(joinedload(Post.subreddit))
+                    .where(Post.id.in_(chunk_ids))
+                )
+                res = await session.execute(stmt)
+                posts = res.scalars().all()
+                total_indexed += await self._index_post_batch(posts)
+        else:
+            # Batch through all posts using pagination
+            offset = 0
+            while True:
+                stmt = (
+                    select(Post)
+                    .options(joinedload(Post.subreddit))
+                    .order_by(Post.id.asc())
+                    .offset(offset)
+                    .limit(batch_size)
+                )
+                res = await session.execute(stmt)
+                posts = res.scalars().all()
+                if not posts:
+                    break
+                total_indexed += await self._index_post_batch(posts)
+                offset += len(posts)
 
+        # --- Process Comments ---
+        if comment_ids is not None:
+            # Explicit list of comment IDs
+            for i in range(0, len(comment_ids), batch_size):
+                chunk_ids = comment_ids[i : i + batch_size]
+                stmt = (
+                    select(Comment)
+                    .options(joinedload(Comment.post).joinedload(Post.subreddit))
+                    .where(Comment.id.in_(chunk_ids))
+                )
+                res = await session.execute(stmt)
+                comments = res.scalars().all()
+                total_indexed += await self._index_comment_batch(comments)
+        else:
+            # Batch through all comments using pagination
+            offset = 0
+            while True:
+                stmt = (
+                    select(Comment)
+                    .options(joinedload(Comment.post).joinedload(Post.subreddit))
+                    .order_by(Comment.id.asc())
+                    .offset(offset)
+                    .limit(batch_size)
+                )
+                res = await session.execute(stmt)
+                comments = res.scalars().all()
+                if not comments:
+                    break
+                total_indexed += await self._index_comment_batch(comments)
+                offset += len(comments)
+
+        return total_indexed
+
+    async def _index_post_batch(self, posts: list[Post]) -> int:
+        ids: list[str] = []
         documents: list[str] = []
         metadatas: list[dict[str, str | int | None]] = []
-        ids: list[str] = []
 
         for post in posts:
-            body = "\\n".join(filter(None, [post.title, post.content]))
+            body = "\n".join(filter(None, [post.title, post.content]))
             if not body:
                 continue
             ids.append(f"post-{post.id}")
@@ -47,6 +110,30 @@ class SemanticService:
                     "post_id": post.id,
                 }
             )
+
+        if not ids:
+            return 0
+
+        embeddings = None
+        try:
+            embeddings = await self.embedding_service.generate_embeddings(documents)
+            if not embeddings or not any(embeddings):
+                embeddings = None
+        except Exception:
+            embeddings = None
+
+        self.chroma_repository.upsert_documents(
+            ids=ids,
+            documents=documents,
+            metadatas=metadatas,
+            embeddings=embeddings,
+        )
+        return len(ids)
+
+    async def _index_comment_batch(self, comments: list[Comment]) -> int:
+        ids: list[str] = []
+        documents: list[str] = []
+        metadatas: list[dict[str, str | int | None]] = []
 
         for comment in comments:
             if not comment.content:
@@ -62,18 +149,41 @@ class SemanticService:
                 }
             )
 
-        if not documents:
+        if not ids:
             return 0
 
-        self.chroma_repository.add_documents(
+        embeddings = None
+        try:
+            embeddings = await self.embedding_service.generate_embeddings(documents)
+            if not embeddings or not any(embeddings):
+                embeddings = None
+        except Exception:
+            embeddings = None
+
+        self.chroma_repository.upsert_documents(
             ids=ids,
             documents=documents,
             metadatas=metadatas,
+            embeddings=embeddings,
         )
         return len(ids)
 
+    async def index_documents(self, session: AsyncSession) -> int:
+        return await self.index_posts_and_comments_batch(session, batch_size=100)
+
     async def semantic_search(self, query: str, top_k: int = 5) -> list[dict[str, str | int | None]]:
-        result = self.chroma_repository.query(query_text=query, n_results=top_k)
+        query_vec = None
+        try:
+            query_vec = await self.embedding_service.generate_embedding(query)
+            if not query_vec:
+                query_vec = None
+        except Exception:
+            query_vec = None
+
+        if query_vec:
+            result = self.chroma_repository.query(n_results=top_k, embedding=query_vec)
+        else:
+            result = self.chroma_repository.query(n_results=top_k, query_text=query)
 
         documents = result.get("documents", [])
         metadatas = result.get("metadatas", [])

@@ -19,11 +19,28 @@ engine: AsyncEngine = create_async_engine(
     echo=False, 
     future=True, 
     poolclass=AsyncAdaptedQueuePool,
-    pool_size=20,
-    max_overflow=10
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    pool_recycle=1800,
+    pool_pre_ping=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+
+def create_scoped_engine(pool_size: int = 5, max_overflow: int = 2) -> AsyncEngine:
+    """Create an isolated AsyncEngine for background worker tasks."""
+    return create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        future=True,
+        poolclass=AsyncAdaptedQueuePool,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+    )
+
 
 
 @asynccontextmanager

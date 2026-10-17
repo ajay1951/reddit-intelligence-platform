@@ -16,8 +16,11 @@ build/
 # Databases & Data
 chroma_data/
 chroma_db/
+backups/
 *.db
 *.sqlite3
+*.sql
+
 
 # IDEs
 .vscode/
@@ -25,3 +28,7 @@ chroma_db/
 
 # Custom Archive (do not upload stray files to GitHub)
 _archive/
+scratch/
+celerybeat-schedule*
+.pytest_cache/
+

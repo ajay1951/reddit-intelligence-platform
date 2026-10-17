@@ -11,14 +11,14 @@ from pydantic import BaseModel, Field
 from backend.config import settings
 from backend.etl.pipeline import run_batch_etl, run_subreddit_etl
 from backend.logging_config import configure_logging
-from backend.routers import (
+from backend.api import (
     comments_router,
     insights_router,
     posts_router,
     search_router,
     subreddits_router,
 )
-from backend.routers.stats import router as stats_router
+from backend.api.stats import router as stats_router
 from backend.scheduler import (
     get_scheduler,
     list_scheduled_jobs,
@@ -29,6 +29,19 @@ from backend.scheduler import (
 
 configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
+
+
+async def parse_post_element(element: Any) -> dict[str, Any]:
+    """Extract post metadata from a DOM element."""
+    try:
+        title = await element.eval_on_selector("h3", "el => el.innerText")
+    except Exception:
+        title = ""
+    try:
+        url = await element.get_attribute("href")
+    except Exception:
+        url = ""
+    return {"title": title, "url": url}
 
 app = FastAPI(title="reddit-hiring-intel-scraper")
 app.include_router(posts_router)

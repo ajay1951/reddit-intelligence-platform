@@ -1,12 +1,10 @@
 services:
   db:
-    image: postgres:15
+    image: postgres:15-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-reddit}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reddit}
       POSTGRES_DB: ${POSTGRES_DB:-reddit_intel}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -33,19 +31,49 @@ services:
       dockerfile: docker/Dockerfile
     env_file:
       - ./.env
+    volumes:
+      - chroma_data:/usr/src/app/chroma_db
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
-        condition: service_started
-    command: ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    command: ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   celery_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    env_file:
+      - ./.env
+    volumes:
+      - chroma_data:/usr/src/app/chroma_db
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stop_grace_period: 60s
+    command: ["celery", "-A", "backend.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    restart: unless-stopped
+
+  celery_beat:
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -55,8 +83,8 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
-    command: ["celery", "-A", "backend.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=1"]
+        condition: service_healthy
+    command: ["celery", "-A", "backend.celery_app.celery_app", "beat", "--loglevel=info"]
     restart: unless-stopped
 
   frontend:
@@ -65,12 +93,16 @@ services:
       dockerfile: docker/Dockerfile.frontend
     ports:
       - "80:80"
-      - "443:443"
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
-      - app
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
 volumes:
   pgdata:
+  chroma_data:

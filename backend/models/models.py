@@ -87,3 +87,24 @@ class Comment(Base):
     technologies: Mapped[list[str] | None] = mapped_column(ARRAY(String), default=list)
 
     post = relationship("Post", back_populates="comments")
+
+
+class IngestionRun(Base):
+    """Audit log for automated 24-hour and on-demand scraping execution runs."""
+
+    __tablename__ = "ingestion_runs"
+    __table_args__ = (
+        Index("ix_ingestion_runs_started_at", "started_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(255), default="24h_auto_scrape")
+    status: Mapped[str] = mapped_column(String(50), default="running")  # running, success, failed
+    subreddits: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    posts_ingested: Mapped[int] = mapped_column(Integer, default=0)
+    comments_ingested: Mapped[int] = mapped_column(Integer, default=0)
+    provider_used: Mapped[str] = mapped_column(String(50), default="huggingface")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+

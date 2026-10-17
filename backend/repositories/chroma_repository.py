@@ -29,6 +29,9 @@ class ChromaRepository:
         metadatas: list[dict[str, str | int | None]],
         embeddings: list[list[float]] | None = None,
     ) -> None:
+        """Idempotently add or update documents in the collection using upsert."""
+        if not ids:
+            return
         kwargs = {
             "ids": ids,
             "documents": documents,
@@ -37,7 +40,17 @@ class ChromaRepository:
         if embeddings is not None:
             kwargs["embeddings"] = embeddings
             
-        self.collection.add(**kwargs)
+        self.collection.upsert(**kwargs)
+
+    def upsert_documents(
+        self,
+        ids: list[str],
+        documents: list[str],
+        metadatas: list[dict[str, str | int | None]],
+        embeddings: list[list[float]] | None = None,
+    ) -> None:
+        """Explicit alias for add_documents with idempotent upsert semantics."""
+        self.add_documents(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
 
     def query(
         self,
@@ -61,3 +74,4 @@ class ChromaRepository:
 
     def reset_collection(self) -> None:
         self.collection.delete()
+

@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reddit}
       POSTGRES_DB: ${POSTGRES_DB:-reddit_intel}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,6 +21,8 @@ services:
       dockerfile: docker/Dockerfile
     env_file:
       - ./.env
+    volumes:
+      - ./:/usr/src/app
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +40,7 @@ services:
       - "8000:8000"
     volumes:
       - ./:/usr/src/app
+      - chroma_data:/usr/src/app/chroma_db
       - hf_cache:/root/.cache/huggingface
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -63,7 +66,12 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   celery_worker:
     build:
@@ -75,11 +83,28 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./:/usr/src/app
+      - chroma_data:/usr/src/app/chroma_db
       - hf_cache:/root/.cache/huggingface
     command: ["celery", "-A", "backend.celery_app.celery_app", "worker", "--loglevel=info"]
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    env_file:
+      - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./:/usr/src/app
+    command: ["celery", "-A", "backend.celery_app.celery_app", "beat", "--loglevel=info"]
+
 
   frontend:
     image: node:20-alpine
@@ -92,4 +117,6 @@ services:
 
 volumes:
   pgdata:
+  chroma_data:
   hf_cache:
+

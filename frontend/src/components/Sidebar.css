@@ -1,56 +1,191 @@
 .sidebar {
   width: 260px;
-  background-color: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid var(--border-light);
+  background-color: #FFFFFF;
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  padding: 20px 16px;
+  height: 100vh;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 40px;
+  padding: 4px 8px 20px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 20px;
 }
 
-.logo-icon {
-  background: var(--gradient-primary);
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+.logo-badge {
+  background: var(--brand-primary);
+  color: #FFFFFF;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+  box-shadow: var(--shadow-xs);
+  flex-shrink: 0;
+}
+
+.brand-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand-title {
+  font-size: 0.925rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  padding: 1px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+  border: 1px solid var(--border-subtle);
+}
+
+.nav-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+  padding: 0 12px;
+  margin-bottom: 8px;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  flex: 1;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   text-decoration: none;
+  font-size: 0.875rem;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.nav-icon {
+  color: var(--text-tertiary);
+  transition: color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.nav-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-shortcut {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-weight: 500;
 }
 
 .nav-item:hover {
-  background-color: var(--bg-card);
+  background-color: var(--bg-subtle);
   color: var(--text-primary);
 }
 
+.nav-item:hover .nav-icon {
+  color: var(--text-secondary);
+}
+
 .nav-item.active {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: var(--accent-blue);
+  background-color: var(--brand-subtle);
+  color: var(--brand-primary);
+  font-weight: 600;
+}
+
+.nav-item.active .nav-icon {
+  color: var(--brand-primary);
+}
+
+.nav-item.active .nav-shortcut {
+  background: #FFFFFF;
+  color: var(--brand-primary);
+  border-color: #C7D2FE;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.system-health-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.health-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.health-ping {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.health-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.health-meta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.health-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.725rem;
+  color: #059669;
+  font-weight: 500;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-subtle);
 }

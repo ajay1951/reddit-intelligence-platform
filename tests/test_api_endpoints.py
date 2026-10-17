@@ -7,12 +7,13 @@ from backend.schemas.comment import CommentSchema
 from backend.schemas.insight import SkillSchema, TrendResponse
 from backend.schemas.post import PostSchema
 from backend.schemas.subreddit import SubredditSchema
-from backend.scripts.run_scraper import app
+from backend.api.main import app
 
 
 def _disable_scheduler(monkeypatch):
     monkeypatch.setattr(settings, "scheduler_enabled", False)
-    monkeypatch.setattr("backend.scripts.run_scraper.start_scheduler", lambda: None)
+    monkeypatch.setattr("backend.api.main.start_scheduler", lambda: None)
+
 
 
 def test_get_posts_endpoint(monkeypatch):
@@ -168,3 +169,14 @@ def test_get_trends_endpoint(monkeypatch):
         "top_subreddits": [{"subreddit": "python", "count": 5}],
         "top_keywords": [{"keyword": "python", "count": 10}],
     }
+
+
+def test_get_schedule_history_endpoint(monkeypatch):
+    _disable_scheduler(monkeypatch)
+    from backend.api.auth import create_access_token
+    token = create_access_token(data={"sub": "admin"}, role="admin")
+    with TestClient(app) as client:
+        res = client.get("/schedule/history", headers={"Authorization": f"Bearer {token}"})
+        assert res.status_code == 200
+        assert isinstance(res.json(), list)
+

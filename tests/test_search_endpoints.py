@@ -4,12 +4,12 @@ from fastapi.testclient import TestClient
 
 from backend.config import settings
 from backend.schemas.search import RagResponse, SemanticSearchResponse
-from backend.scripts.run_scraper import app
+from backend.api.main import app
 
 
 def _disable_scheduler(monkeypatch):
     monkeypatch.setattr(settings, "scheduler_enabled", False)
-    monkeypatch.setattr("backend.scripts.run_scraper.start_scheduler", lambda: None)
+    monkeypatch.setattr("backend.api.main.start_scheduler", lambda: None)
 
 
 def test_semantic_search_endpoint(monkeypatch):
@@ -56,16 +56,25 @@ def test_reindex_vectors_endpoint(monkeypatch):
     )
     _disable_scheduler(monkeypatch)
 
+    from backend.api.auth import create_access_token
+    token = create_access_token({"sub": "admin_test"}, role="admin")
+
     with TestClient(app) as client:
-        response = client.post("/search/reindex")
+        response = client.post(
+            "/search/reindex",
+            headers={"Authorization": f"Bearer {token}"}
+        )
 
     assert response.status_code == 200
     assert response.json() == {"indexed_documents": 42}
 
 
+
 def test_rag_endpoint(monkeypatch):
-    async def fake_answer_query(self, query, top_k):
+    async def fake_answer_query(self, session, query, top_k=5, **kwargs):
         return (
+
+
             "This answer uses retrieved context.",
             [
                 {

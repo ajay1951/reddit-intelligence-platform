@@ -1,22 +1,77 @@
-name: Deploy to DigitalOcean
+name: Deployment Workflow
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "Target deployment environment"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+          - staging
+  release:
+    types: [published]
+
+permissions:
+  contents: read
 
 jobs:
-  deploy:
+  pre-deploy-check:
+    name: Pre-Deployment Safety Verification
     runs-on: ubuntu-latest
-
     steps:
-    - name: Deploy to Server via SSH
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.DROPLET_IP }}
-        username: root
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        script: |
-          cd /root/reddit-intelligence
-          git pull origin main
-          docker-compose up --build -d
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Production Compose Config
+        run: docker compose -f docker-compose.prod.yml config
+
+  deploy:
+    name: Deploy to Production Host
+    needs: pre-deploy-check
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Execute Controlled Zero-Downtime Deployment via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER || 'deploy' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "==> Deploying Reddit Intelligence Platform to host..."
+            cd /opt/reddit-intelligence || cd /root/reddit-intelligence
+            
+            # 1. Fetch latest verified commit
+            git fetch --prune
+            git checkout main
+            git pull origin main
+            
+            # 2. Validate configuration before restart
+            docker compose -f docker-compose.prod.yml config > /dev/null
+            
+            # 3. Build & start services gracefully
+            docker compose -f docker-compose.prod.yml up --build -d --remove-orphans
+            
+            # 4. Wait and execute health-check readiness probe
+            echo "==> Awaiting service readiness probe..."
+            sleep 15
+            for i in {1..10}; do
+              if curl -s -f http://localhost:8000/health/ready; then
+                echo "==> Health readiness check passed successfully!"
+                exit 0
+              fi
+              echo "Waiting for services to become ready (attempt $i/10)..."
+              sleep 5
+            done
+            
+            echo "ERROR: Service readiness probe failed after deployment!"
+            echo "Execute rollback: docker compose -f docker-compose.prod.yml rollback or restart prior image."
+            exit 1
